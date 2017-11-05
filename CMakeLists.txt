@@ -109,6 +109,12 @@ externalproject_add(ja2
 )
 
 add_custom_target(
+    rust-unit-tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/rust
+    COMMAND ${CMAKE_COMMAND} -E env RUST_BACKTRACE=1 CARGO_TARGET_DIR=${CMAKE_BINARY_DIR}/rust-unit-tests cargo test
+)
+
+add_custom_target(
     ja2-stracciatella
     ALL
     DEPENDS ja2 stracciatella-assets
