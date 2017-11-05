@@ -17,6 +17,11 @@ externalproject_add(boost-internal
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/dependencies/lib-boost -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 )
 
+set(GTEST_BUILD_PREFIX "")
+if (MSVC)
+    set(GTEST_BUILD_PREFIX "${CMAKE_BUILD_TYPE}/")
+endif()
+
 externalproject_add(gtest-internal
     EXCLUDE_FROM_ALL 1
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib-gtest
@@ -24,9 +29,9 @@ externalproject_add(gtest-internal
     INSTALL_COMMAND
         ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/lib
     COMMAND
-        ${CMAKE_COMMAND} -E copy ${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/lib/
+        ${CMAKE_COMMAND} -E copy ${GTEST_BUILD_PREFIX}${CMAKE_STATIC_LIBRARY_PREFIX}gtest${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/lib/
     COMMAND
-        ${CMAKE_COMMAND} -E copy ${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/lib/
+        ${CMAKE_COMMAND} -E copy ${GTEST_BUILD_PREFIX}${CMAKE_STATIC_LIBRARY_PREFIX}gtest_main${CMAKE_STATIC_LIBRARY_SUFFIX} ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/lib/
     COMMAND
         ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/lib-gtest/include ${CMAKE_BINARY_DIR}/dependencies/lib-gtest/include
 )
