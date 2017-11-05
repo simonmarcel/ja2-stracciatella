@@ -38,7 +38,7 @@ if (WITH_UNITTESTS)
 endif()
 
 if (LOCAL_SDL_LIB)
-    set(ENV{SDL2DIR} "${CMAKE_INSTALL_DIR}/dependencies/lib-sdl2")
+    set(ENV{SDL2DIR} "${CMAKE_INSTALL_PREFIX}/dependencies/lib-sdl2")
 endif()
 find_package(SDL2 REQUIRED)
 message(STATUS "SDL2 Libraries: ${SDL2_LIBRARY} SDL2 Includes: ${SDL2_INCLUDE_DIR}")
