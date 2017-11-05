@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 project(libstracciatella)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ../cmake)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/../cmake)
 
 find_package(Cargo 0.9.0 REQUIRED)
 find_package(Rustc 1.15.0 REQUIRED)
@@ -41,4 +41,4 @@ add_custom_target(
     DEPENDS ${LIBRARY_LOCATION}
 )
 
-install(FILES ${LIBRARY_LOCATION} DESTINATION lib)
+install(FILES ${LIBRARY_LOCATION} DESTINATION .)

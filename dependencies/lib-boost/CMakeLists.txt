@@ -20,3 +20,6 @@ set(source_files
 )
 
 add_library(boost ${source_files})
+
+install(TARGETS boost DESTINATION lib)
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/boost DESTINATION include)

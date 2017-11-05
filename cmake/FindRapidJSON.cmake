@@ -1,0 +1,7 @@
+find_path(
+  RAPIDJSON_INCLUDE_DIRS
+  NAMES rapidjson/rapidjson.h
+  PATHS ${CMAKE_INSTALL_PREFIX}/dependencies/lib-rapidjson/include
+)
+
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(RapidJSON REQUIRED_VARS RAPIDJSON_INCLUDE_DIRS)

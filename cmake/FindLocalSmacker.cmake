@@ -1,0 +1,12 @@
+set(SMACKER_INCLUDE_DIRS ${CMAKE_INSTALL_PREFIX}/dependencies/lib-smacker/include)
+
+find_library(
+    SMACKER_LIBRARIES
+    NAMES smacker
+    PATH_SUFFIXES lib
+    PATHS ${CMAKE_INSTALL_PREFIX}/dependencies/lib-smacker
+)
+
+INCLUDE(FindPackageHandleStandardArgs)
+
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(Smacker REQUIRED_VARS SMACKER_LIBRARIES SMACKER_INCLUDE_DIRS)

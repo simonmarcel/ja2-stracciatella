@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-project(smacker)
+project(libsmacker)
 
 set(source_files
     libsmacker/smacker.c
@@ -9,3 +9,7 @@ set(source_files
 )
 
 add_library(smacker ${source_files})
+
+file(GLOB HEADERS libsmacker/*.h)
+install(TARGETS smacker DESTINATION lib)
+install(FILES ${HEADERS} DESTINATION include)
