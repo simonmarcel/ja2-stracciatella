@@ -121,6 +121,7 @@ pub fn build_engine_options_from_env_and_args(args: Vec<String>) -> Result<Engin
 
 #[cfg(test)]
 mod tests {
+   extern crate regex;
    extern crate tempdir;
 
    use fs;
@@ -378,7 +379,7 @@ r##"{
         engine_options.stracciatella_home = super::find_stracciatella_home().unwrap();
 
         let regex = Regex::new(r"^[A-Z]:\\(.*)+\\JA2").unwrap();
-        assert!(regex.is_match(engine_options.stracciatella_home.to_str().unwrap()), "{} is not a valid home dir for windows", result);
+        assert!(regex.is_match(engine_options.stracciatella_home.to_str().unwrap()), "{} is not a valid home dir for windows", engine_options.stracciatella_home);
     }
 
     #[test]
