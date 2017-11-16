@@ -76,11 +76,12 @@ pub fn find_stracciatella_home() -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 pub fn find_stracciatella_home() -> Result<PathBuf, String> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use std::ptr;
     use shell32::SHGetFolderPathW;
     use winapi::shlobj::{CSIDL_PERSONAL, CSIDL_FLAG_CREATE};
     use winapi::minwindef::MAX_PATH;
-    use std::ffi::OsString;
-    use std::os::windows::ffi::OsStringExt;
 
     let mut home: [u16; MAX_PATH] = [0; MAX_PATH];
 
