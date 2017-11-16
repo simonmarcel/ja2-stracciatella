@@ -30,25 +30,8 @@ mod resources;
 
 use engine::EngineOptions;
 use resources::ResourceVersion;
-use cli::parse_args;
 use cli::get_command_line_options;
-use config::{find_stracciatella_home, parse_json_config, ensure_json_config_existence, write_json_config};
-
-pub fn build_engine_options_from_env_and_args(args: Vec<String>) -> Result<EngineOptions, String> {
-    let home_dir = find_stracciatella_home().and_then(|h| ensure_json_config_existence(h))?;
-    let mut engine_options = parse_json_config(home_dir)?;
-
-    match parse_args(&mut engine_options, args) {
-        None => Ok(()),
-        Some(str) => Err(str)
-    }?;
-
-    if engine_options.vanilla_data_dir == PathBuf::from("") {
-        return Err(String::from("Vanilla data directory has to be set either in config file or per command line switch"))
-    }
-
-    Ok(engine_options)
-}
+use config::{write_json_config, build_engine_options_from_env_and_args};
 
 macro_rules! unsafe_from_ptr {
     ($ptr:expr) => { unsafe { assert!(!$ptr.is_null()); &*$ptr } }
@@ -234,71 +217,14 @@ pub fn free_rust_string(s: *mut c_char) {
 
 #[cfg(test)]
 mod tests {
-    extern crate regex;
-    extern crate tempdir;
-
     use std::str;
     use std::ffi::{CStr, CString};
-    use std::fs;
-    use std::fs::File;
-    use std::io::prelude::*;
-    use std::env;
 
     macro_rules! assert_chars_eq { ($got:expr, $expected:expr) => {
         unsafe {
             assert_eq!(str::from_utf8(CStr::from_ptr($got).to_bytes()).unwrap(), $expected);
         }
     } }
-
-    fn write_temp_folder_with_ja2_ini(contents: &[u8]) -> tempdir::TempDir {
-        let dir = tempdir::TempDir::new("ja2-test").unwrap();
-        let ja2_home_dir = dir.path().join(".ja2");
-        let file_path = ja2_home_dir.join("ja2.json");
-
-        fs::create_dir(ja2_home_dir).unwrap();
-        let mut f = File::create(file_path).unwrap();
-        f.write_all(contents).unwrap();
-        f.sync_all().unwrap();
-
-        return dir
-    }
-
-    #[test]
-    #[cfg(not(windows))]
-    fn build_engine_options_from_env_and_args_should_overwrite_json_with_command_line_args() {
-        let temp_dir = write_temp_folder_with_ja2_ini(b"{ \"data_dir\": \"/some/place/where/the/data/is\", \"res\": \"1024x768\", \"fullscreen\": true }");
-        let args = vec!(String::from("ja2"), String::from("--res"), String::from("1100x480"));
-        let old_home = env::var("HOME");
-
-        env::set_var("HOME", temp_dir.path());
-        let engine_options_res = super::build_engine_options_from_env_and_args(args);
-        match old_home {
-            Ok(home) => env::set_var("HOME", home),
-            _ => {}
-        }
-        let engine_options = engine_options_res.unwrap();
-
-        assert_eq!(super::get_resolution_x(&engine_options), 1100);
-        assert_eq!(super::get_resolution_y(&engine_options), 480);
-        assert_eq!(super::should_start_in_fullscreen(&engine_options), true);
-    }
-
-    #[test]
-    #[cfg(not(windows))]
-    fn build_engine_options_from_env_and_args_should_return_an_error_if_datadir_is_not_set() {
-        let temp_dir = write_temp_folder_with_ja2_ini(b"{ \"res\": \"1024x768\", \"fullscreen\": true }");
-        let args = vec!(String::from("ja2"), String::from("--res"), String::from("1100x480"));
-        let old_home = env::var("HOME");
-        let expected_error_message = "Vanilla data directory has to be set either in config file or per command line switch";
-
-        env::set_var("HOME", temp_dir.path());
-        let engine_options_res = super::build_engine_options_from_env_and_args(args);
-        match old_home {
-            Ok(home) => env::set_var("HOME", home),
-            _ => {}
-        }
-        assert_eq!(engine_options_res, Err(String::from(expected_error_message)));
-    }
 
     #[test]
     fn get_resource_version_string_should_return_the_correct_resource_version_string() {

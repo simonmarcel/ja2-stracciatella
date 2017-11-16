@@ -4,6 +4,7 @@ use std::error::Error;
 use std::io::Write;
 use serde_json;
 
+use cli::parse_args;
 use engine::EngineOptions;
 
 #[cfg(not(windows))]
@@ -100,6 +101,22 @@ pub fn find_stracciatella_home() -> Result<PathBuf, String> {
         },
         i => Err(format!("Could not get documents folder: {}", i))
     };
+}
+
+pub fn build_engine_options_from_env_and_args(args: Vec<String>) -> Result<EngineOptions, String> {
+    let home_dir = find_stracciatella_home().and_then(|h| ensure_json_config_existence(h))?;
+    let mut engine_options = parse_json_config(home_dir)?;
+
+    match parse_args(&mut engine_options, args) {
+        None => Ok(()),
+        Some(str) => Err(str)
+    }?;
+
+    if engine_options.vanilla_data_dir == PathBuf::from("") {
+        return Err(String::from("Vanilla data directory has to be set either in config file or per command line switch"))
+    }
+
+    Ok(engine_options)
 }
 
 #[cfg(test)]
@@ -301,27 +318,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(windows))]
-    fn find_stracciatella_home_should_find_the_correct_stracciatella_home_path_on_unixlike() {
-        let mut engine_options: super::EngineOptions = Default::default();
-        engine_options.stracciatella_home = super::find_stracciatella_home().unwrap();
-
-        assert_eq!(engine_options.stracciatella_home.to_str().unwrap(), format!("{}/.ja2", env::var("HOME").unwrap()));
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn find_stracciatella_home_should_find_the_correct_stracciatella_home_path_on_windows() {
-        use self::regex::Regex;
-
-        let mut engine_options: super::EngineOptions = Default::default();
-        engine_options.stracciatella_home = super::find_stracciatella_home().unwrap();
-
-        let regex = Regex::new(r"^[A-Z]:\\(.*)+\\JA2").unwrap();
-        assert!(regex.is_match(engine_options.stracciatella_home.to_str().unwrap()), "{} is not a valid home dir for windows", result);
-    }
-
-    #[test]
     fn write_json_config_should_write_a_json_file_that_can_be_serialized_again() {
         let mut engine_options = super::EngineOptions::default();
         let temp_dir = write_temp_folder_with_ja2_ini(b"Invalid JSON");
@@ -362,5 +358,62 @@ r##"{
   "debug": false,
   "nosound": false
 }"##);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn find_stracciatella_home_should_find_the_correct_stracciatella_home_path_on_unixlike() {
+        let mut engine_options: super::EngineOptions = Default::default();
+        engine_options.stracciatella_home = super::find_stracciatella_home().unwrap();
+
+        assert_eq!(engine_options.stracciatella_home.to_str().unwrap(), format!("{}/.ja2", env::var("HOME").unwrap()));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn find_stracciatella_home_should_find_the_correct_stracciatella_home_path_on_windows() {
+        use self::regex::Regex;
+
+        let mut engine_options: super::EngineOptions = Default::default();
+        engine_options.stracciatella_home = super::find_stracciatella_home().unwrap();
+
+        let regex = Regex::new(r"^[A-Z]:\\(.*)+\\JA2").unwrap();
+        assert!(regex.is_match(engine_options.stracciatella_home.to_str().unwrap()), "{} is not a valid home dir for windows", result);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn build_engine_options_from_env_and_args_should_overwrite_json_with_command_line_args() {
+        let temp_dir = write_temp_folder_with_ja2_ini(b"{ \"data_dir\": \"/some/place/where/the/data/is\", \"res\": \"1024x768\", \"fullscreen\": true }");
+        let args = vec!(String::from("ja2"), String::from("--res"), String::from("1100x480"));
+        let old_home = env::var("HOME");
+
+        env::set_var("HOME", temp_dir.path());
+        let engine_options_res = super::build_engine_options_from_env_and_args(args);
+        match old_home {
+            Ok(home) => env::set_var("HOME", home),
+            _ => {}
+        }
+        let engine_options = engine_options_res.unwrap();
+
+        assert_eq!(engine_options.resolution, (1100, 480));
+        assert_eq!(engine_options.start_in_fullscreen, true);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn build_engine_options_from_env_and_args_should_return_an_error_if_datadir_is_not_set() {
+        let temp_dir = write_temp_folder_with_ja2_ini(b"{ \"res\": \"1024x768\", \"fullscreen\": true }");
+        let args = vec!(String::from("ja2"), String::from("--res"), String::from("1100x480"));
+        let old_home = env::var("HOME");
+        let expected_error_message = "Vanilla data directory has to be set either in config file or per command line switch";
+
+        env::set_var("HOME", temp_dir.path());
+        let engine_options_res = super::build_engine_options_from_env_and_args(args);
+        match old_home {
+            Ok(home) => env::set_var("HOME", home),
+            _ => {}
+        }
+        assert_eq!(engine_options_res, Err(String::from(expected_error_message)));
     }
 }
