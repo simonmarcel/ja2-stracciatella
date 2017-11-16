@@ -17,305 +17,38 @@ use std::slice;
 use std::str;
 use std::str::FromStr;
 use std::ptr;
-use std::fmt;
-use std::fmt::Display;
 use std::fs;
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
-use std::default::Default;
 use std::io::prelude::*;
 use std::fs::File;
 use std::error::Error;
-use serde::Deserializer;
-use serde::Deserialize;
-use serde::Serializer;
-use serde::Serialize;
 
-use getopts::Options;
 use libc::{size_t, c_char};
 
-#[cfg(not(windows))]
-static DATA_DIR_OPTION_EXAMPLE: &'static str = "/opt/ja2";
+
 #[cfg(not(windows))]
 static DEFAULT_JSON_CONTENT: &'static str = r##"{
     "help": "Put the directory to your original ja2 installation into the line below",
     "data_dir": "/some/place/where/the/data/is"
 }"##;
 
-#[cfg(windows)]
-static DATA_DIR_OPTION_EXAMPLE: &'static str = "C:\\JA2";
+
 #[cfg(windows)]
 static DEFAULT_JSON_CONTENT: &'static str = r##"{
    "help": "Put the directory to your original ja2 installation into the line below. Make sure to use double backslashes.",
    "data_dir": "C:\\Program Files\\Jagged Alliance 2"
 }"##;
 
-#[derive(Debug, PartialEq, Copy, Clone, Serialize, Deserialize)]
-#[repr(C)]
-#[allow(non_camel_case_types)]
-pub enum ResourceVersion {
-    DUTCH,
-    ENGLISH,
-    FRENCH,
-    GERMAN,
-    ITALIAN,
-    POLISH,
-    RUSSIAN,
-    RUSSIAN_GOLD,
-}
+mod cli;
+mod config;
+mod engine;
+mod resources;
 
-impl FromStr for ResourceVersion {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "DUTCH" => Ok(ResourceVersion::DUTCH),
-            "ENGLISH" => Ok(ResourceVersion::ENGLISH),
-            "FRENCH" => Ok(ResourceVersion::FRENCH),
-            "GERMAN" => Ok(ResourceVersion::GERMAN),
-            "ITALIAN" => Ok(ResourceVersion::ITALIAN),
-            "POLISH" => Ok(ResourceVersion::POLISH),
-            "RUSSIAN" => Ok(ResourceVersion::RUSSIAN),
-            "RUSSIAN_GOLD" => Ok(ResourceVersion::RUSSIAN_GOLD),
-            _ => Err(format!("Resource version {} is unknown", s))
-        }
-    }
-}
-
-impl Display for ResourceVersion {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &ResourceVersion::DUTCH => "DUTCH",
-            &ResourceVersion::ENGLISH => "ENGLISH",
-            &ResourceVersion::FRENCH => "FRENCH",
-            &ResourceVersion::GERMAN => "GERMAN",
-            &ResourceVersion::ITALIAN => "ITALIAN",
-            &ResourceVersion::POLISH => "POLISH",
-            &ResourceVersion::RUSSIAN => "RUSSIAN",
-            &ResourceVersion::RUSSIAN_GOLD => "RUSSIAN_GOLD",
-        })
-    }
-}
-
-fn parse_resolution(resolution_str: &str) -> Result<(u16, u16), String> {
-    let mut resolutions = resolution_str.split("x").filter_map(|r_str| r_str.parse::<u16>().ok());
-
-    match (resolutions.next(), resolutions.next()) {
-        (Some(x), Some(y)) => Ok((x, y)),
-        _ => Err(String::from("Incorrect resolution format, should be WIDTHxHEIGHT."))
-    }
-}
-
-fn deserialize_resolution<'de, D>(deserializer: D) -> Result<(u16, u16), D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let res = String::deserialize(deserializer)?;
-    parse_resolution(&res).map_err(|s| serde::de::Error::custom(s))
-}
-
-fn serialize_resolution<S>(&(x, y): &(u16, u16), serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    String::serialize(&format!("{}x{}", x, y), serializer)
-}
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct EngineOptions {
-    #[serde(skip)]
-    stracciatella_home: PathBuf,
-    #[serde(rename = "data_dir")]
-    vanilla_data_dir: PathBuf,
-    mods: Vec<String>,
-    #[serde(rename ="res", serialize_with = "serialize_resolution", deserialize_with = "deserialize_resolution")]
-    resolution: (u16, u16),
-    #[serde(rename = "resversion")]
-    resource_version: ResourceVersion,
-    #[serde(skip)]
-    show_help: bool,
-    #[serde(skip)]
-    run_unittests: bool,
-    #[serde(skip)]
-    run_editor: bool,
-    #[serde(rename = "fullscreen")]
-    start_in_fullscreen: bool,
-    #[serde(skip)]
-    start_in_window: bool,
-    #[serde(rename = "debug")]
-    start_in_debug_mode: bool,
-    #[serde(rename = "nosound")]
-    start_without_sound: bool,
-}
-
-impl Default for EngineOptions {
-    fn default() -> EngineOptions {
-        EngineOptions {
-            stracciatella_home: PathBuf::from(""),
-            vanilla_data_dir: PathBuf::from(""),
-            mods: vec!(),
-            resolution: (640, 480),
-            resource_version: ResourceVersion::ENGLISH,
-            show_help: false,
-            run_unittests: false,
-            run_editor: false,
-            start_in_fullscreen: false,
-            start_in_window: true,
-            start_in_debug_mode: false,
-            start_without_sound: false,
-        }
-    }
-}
-
-pub fn get_command_line_options() -> Options {
-    let mut opts = Options::new();
-
-    opts.long_only(true);
-
-    opts.optmulti(
-        "",
-        "datadir",
-        "Set path for data directory",
-        DATA_DIR_OPTION_EXAMPLE
-    );
-    opts.optmulti(
-        "",
-        "mod",
-        "Start one of the game modifications. MOD_NAME is the name of modification, e.g. 'from-russia-with-love. See mods folder for possible options'.",
-        "MOD_NAME"
-    );
-    opts.optopt(
-        "",
-        "res",
-        "Screen resolution, e.g. 800x600. Default value is 640x480",
-        "WIDTHxHEIGHT"
-    );
-    opts.optopt(
-        "",
-        "resversion",
-        "Version of the game resources. Possible values: DUTCH, ENGLISH, FRENCH, GERMAN, ITALIAN, POLISH, RUSSIAN, RUSSIAN_GOLD. Default value is ENGLISH. RUSSIAN is for BUKA Agonia Vlasty release. RUSSIAN_GOLD is for Gold release",
-        "RUSSIAN_GOLD"
-    );
-    opts.optflag(
-        "",
-        "unittests",
-        "Perform unit tests. E.g. 'ja2.exe -unittests --gtest_output=\"xml:report.xml\" --gtest_repeat=2'");
-    opts.optflag(
-        "",
-        "editor",
-        "Start the map editor (Editor.slf is required)"
-    );
-    opts.optflag(
-        "",
-        "fullscreen",
-        "Start the game in the fullscreen mode"
-    );
-    opts.optflag(
-        "",
-        "nosound",
-        "Turn the sound and music off"
-    );
-    opts.optflag(
-        "",
-        "window",
-        "Start the game in a window"
-    );
-    opts.optflag(
-        "",
-        "debug",
-        "Enable Debug Mode"
-    );
-    opts.optflag(
-        "",
-        "help",
-        "print this help menu"
-    );
-
-    return opts;
-}
-
-fn parse_args(engine_options: &mut EngineOptions, args: Vec<String>) -> Option<String> {
-    let opts = get_command_line_options();
-
-    match opts.parse(&args[1..]) {
-        Ok(m) => {
-            if m.free.len() > 0 {
-                return Some(format!("Unknown arguments: '{}'.", m.free.join(" ")));
-            }
-
-            if let Some(s) = m.opt_str("datadir") {
-                match fs::canonicalize(PathBuf::from(s)) {
-                    Ok(s) => {
-                        let mut temp = String::from(s.to_str().expect("Should not happen"));
-                        // remove UNC path prefix (Windows)
-                        if temp.starts_with("\\\\") {
-                            temp.drain(..2);
-                            let pos = temp.find("\\").unwrap() + 1;
-                            temp.drain(..pos);
-                        }
-                        engine_options.vanilla_data_dir = PathBuf::from(temp)
-                    },
-                    Err(_) => return Some(String::from("Please specify an existing datadir."))
-                };
-            }
-
-            if m.opt_strs("mod").len() > 0 {
-                engine_options.mods = m.opt_strs("mod");
-            }
-
-            if let Some(s) = m.opt_str("res") {
-                match parse_resolution(&s) {
-                    Ok(res) => {
-                        engine_options.resolution = res;
-                    },
-                    Err(s) => return Some(s)
-                }
-            }
-
-            if let Some(s) = m.opt_str("resversion") {
-                match ResourceVersion::from_str(&s) {
-                    Ok(resource_version) => {
-                        engine_options.resource_version = resource_version
-                    },
-                    Err(str) => return Some(str)
-                }
-            }
-
-            if m.opt_present("help") {
-                engine_options.show_help = true;
-            }
-
-
-            if m.opt_present("unittests") {
-                engine_options.run_unittests = true;
-            }
-
-            if m.opt_present("editor") {
-                engine_options.run_editor = true;
-            }
-
-            if m.opt_present("fullscreen") {
-                engine_options.start_in_fullscreen = true;
-            }
-
-            if m.opt_present("nosound") {
-                engine_options.start_without_sound = true;
-            }
-
-            if m.opt_present("window") {
-                engine_options.start_in_window = true;
-            }
-
-            if m.opt_present("debug") {
-                engine_options.start_in_debug_mode = true;
-            }
-
-            return None;
-        }
-        Err(f) => Some(f.to_string())
-    }
-}
+use engine::EngineOptions;
+use resources::ResourceVersion;
+use cli::parse_args;
+use cli::get_command_line_options;
 
 fn build_json_config_location(stracciatella_home: &PathBuf) -> PathBuf {
     let mut path = PathBuf::from(stracciatella_home);
