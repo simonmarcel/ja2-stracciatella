@@ -1,5 +1,5 @@
 [package]
-name = "stracciatella"
+name = "stracciatella_dll"
 version = "0.1.0"
 authors = ["Stefan Lau <github@stefanlau.com>"]
 
@@ -15,11 +15,12 @@ name = "stracciatella"
 path = "src/stracciatella.rs"
 
 [dependencies]
-getopts = "0.2.15"
 libc = "0.2"
 serde = "1"
-serde_derive = "1"
 serde_json = "1"
+
+[dependencies.stracciatella]
+path = "./stracciatella"
 
 [dev-dependencies]
 regex = "0.1"
